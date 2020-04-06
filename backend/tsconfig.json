@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "es2017",
+      "dom"
+    ],
+    "module": "commonjs",
+    "target": "es2017",
+    "strict": true,
+    "importHelpers": true,
+    "noImplicitReturns": true,
+    "strictNullChecks": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "typeRoots": [
+      "./node_modules/@types",
+      "./custom-typings"
+    ]
+  },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
