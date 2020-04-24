@@ -4,25 +4,20 @@ import { toRequestHandler, fromRequestHandler } from "hyper-ts/lib/express";
 import { pipe } from "fp-ts/lib/pipeable";
 import { either } from "fp-ts";
 import { constUndefined, constant, flow } from "fp-ts/lib/function";
-import { strict, string } from "io-ts";
 import { failure } from "io-ts/lib/PathReporter";
+import { newQuoteIO } from "../model/quote.model";
+import { checkQuoteExists } from "./controllers/quote.controller";
 
 const json = express.json();
 
 const jsonMiddleware = fromRequestHandler(json, constUndefined);
-
-const NewQuote = strict({
-  selector: string,
-  quote: string,
-  url: string,
-});
 
 const newQuoteBodyDecoder = pipe(
   jsonMiddleware,
   H.ichain(() =>
     H.decodeBody((u) =>
       pipe(
-        NewQuote.decode(u),
+        newQuoteIO.decode(u),
         either.mapLeft(
           (errors) => `invalid body: ${failure(errors).join("\n")}`
         )
@@ -31,24 +26,18 @@ const newQuoteBodyDecoder = pipe(
   )
 );
 
-// test
-const delay: (ms: number) => () => Promise<void> = (ms: number) => () =>
-  new Promise((resolve) => setTimeout(resolve, ms, undefined));
-
 const processNewQuoteRequest = pipe(
   newQuoteBodyDecoder,
-  H.ichain(({ selector, quote, url }) =>
+  H.ichain((quoteRequest) =>
     pipe(
-      H.tryCatch(delay(5000), constant("Error in delay")),
-      H.ichain(() => H.status(H.Status.OK)),
-      H.ichain(() => H.closeHeaders()),
-      H.ichain(() =>
+      H.tryCatch(
+        () => checkQuoteExists(quoteRequest),
+        constant("Error in delay")
+      ),
+      H.ichain((v) =>
         pipe(
-          either.stringifyJSON(
-            JSON.stringify({ selector, quote, url }),
-            either.toError
-          ),
-          flow(either.fold(() => H.send("Error"), H.send))
+          H.status(v ? H.Status.OK : H.Status.BadRequest),
+          H.ichain(() => H.json({ isAuthenticQuote: v }, () => "error"))
         )
       )
     )
@@ -69,3 +58,10 @@ app.get("/", toRequestHandler(hello));
 app.post("/newquote", toRequestHandler(processNewQuoteRequest));
 
 app.listen(() => console.log("Express listening on port 3333. Use: GET /"));
+
+/* 
+
+test payload
+{"selector": "#story > section > div:nth-child(8) > div > p:nth-child(1)", "quote": "On Tuesday, Mr. Cuomo announced that 731 more people had died of the virus, the state’s highest one-day total yet. The overall death toll in New York is 5,489 people.", "url": "https://www.nytimes.com/2020/04/08/nyregion/new-york-coronavirus-response-delays.html?action=click&module=Top%20Stories&pgtype=Homepage"}
+
+*/
